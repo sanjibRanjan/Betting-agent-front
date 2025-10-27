@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cricket Betting Agent Frontend</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .nav button {
+            padding: 10px 20px;
+            border: 1px solid #007bff;
+            background: white;
+            color: #007bff;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .nav button.active {
+            background: #007bff;
+            color: white;
+        }
+        .card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-connected {
+            background: #28a745;
+        }
+        .status-disconnected {
+            background: #dc3545;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .match-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .match-card:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .match-status {
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .status-live {
+            background: #dc3545;
+            color: white;
+        }
+        .status-finished {
+            background: #6c757d;
+            color: white;
+        }
+        .status-upcoming {
+            background: #007bff;
+            color: white;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 32px; height: 32px; background: #22c55e; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">🏏</div>
+                    <h1 style="margin: 0; font-size: 24px; font-weight: bold;">Cricket Betting Agent</h1>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div id="status-indicator" class="status-indicator status-disconnected"></div>
+                        <span id="status-text" style="font-size: 14px; color: #6c757d;">Backend Disconnected</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav">
+            <button onclick="showTab('matches')" id="matches-tab" class="active">🏏 Live Matches</button>
+            <button onclick="showTab('questions')" id="questions-tab">🎯 AI Questions</button>
+            <button onclick="showTab('monitoring')" id="monitoring-tab">📊 Monitoring</button>
+        </div>
+
+        <!-- Main Content -->
+        <main id="main-content">
+            <div id="matches-content">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h2 style="margin: 0; font-size: 24px; font-weight: bold;">Live Cricket Matches</h2>
+                        <button onclick="loadMatches()" id="refresh-btn" class="btn btn-primary">
+                            🔄 Refresh
+                        </button>
+                    </div>
+
+                    <div id="last-update" style="font-size: 14px; color: #6c757d; margin-bottom: 16px;"></div>
+
+                    <div id="matches-error" class="error" style="display: none;"></div>
+
+                    <div id="matches-content-area">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>Loading matches...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="questions-content" style="display: none;">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h2 style="margin: 0; font-size: 24px; font-weight: bold;">AI-Generated Questions</h2>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 14px; color: #6c757d;">🧠 ML Enhanced</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 24px;">
+                        <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 8px;">
+                            Select Match ID
+                        </label>
+                        <div style="display: flex; gap: 8px;">
+                            <input
+                                type="text"
+                                id="match-id-input"
+                                placeholder="Enter match ID (e.g., 12345)"
+                                style="flex: 1; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 4px;"
+                            />
+                            <button onclick="loadQuestions()" id="load-questions-btn" class="btn btn-primary">
+                                Load Questions
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="questions-error" class="error" style="display: none;"></div>
+
+                    <div id="questions-content-area">
+                        <div class="loading">
+                            <div style="font-size: 48px; color: #dee2e6;">🧠</div>
+                            <p>No questions available</p>
+                            <p style="font-size: 14px;">Select a match and load questions to get started</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="monitoring-content" style="display: none;">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h2 style="margin: 0; font-size: 24px; font-weight: bold;">System Monitoring</h2>
+                        <button onclick="loadMonitoring()" id="monitoring-refresh-btn" class="btn btn-primary">
+                            Refresh
+                        </button>
+                    </div>
+
+                    <div id="monitoring-error" class="error" style="display: none;"></div>
+
+                    <div id="monitoring-content-area">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>Loading monitoring data...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer style="margin-top: 48px; padding: 24px; text-align: center; color: #6c757d; border-top: 1px solid #dee2e6;">
+            <p style="margin: 0; font-size: 14px;">
+                AI Cricket Betting Agent Frontend - Built with HTML, CSS, and JavaScript
+            </p>
+            <p style="margin: 8px 0 0 0; font-size: 12px;">
+                Real-time cricket data powered by SportMonks API
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000';
+        let currentTab = 'matches';
+
+        // Test backend connection
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/test-connection`);
+                const data = await response.json();
+                updateConnectionStatus(data.success);
+            } catch (error) {
+                updateConnectionStatus(false);
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('status-indicator');
+            const text = document.getElementById('status-text');
+            
+            if (connected) {
+                indicator.className = 'status-indicator status-connected';
+                text.textContent = 'Backend Connected';
+            } else {
+                indicator.className = 'status-indicator status-disconnected';
+                text.textContent = 'Backend Disconnected';
+            }
+        }
+
+        function showTab(tabName) {
+            // Hide all content
+            document.getElementById('matches-content').style.display = 'none';
+            document.getElementById('questions-content').style.display = 'none';
+            document.getElementById('monitoring-content').style.display = 'none';
+
+            // Remove active class from all tabs
+            document.getElementById('matches-tab').classList.remove('active');
+            document.getElementById('questions-tab').classList.remove('active');
+            document.getElementById('monitoring-tab').classList.remove('active');
+
+            // Show selected content
+            document.getElementById(`${tabName}-content`).style.display = 'block';
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            currentTab = tabName;
+
+            // Load data for the selected tab
+            if (tabName === 'matches') {
+                loadMatches();
+            } else if (tabName === 'monitoring') {
+                loadMonitoring();
+            }
+        }
+
+        async function loadMatches() {
+            const contentArea = document.getElementById('matches-content-area');
+            const errorDiv = document.getElementById('matches-error');
+            const lastUpdateDiv = document.getElementById('last-update');
+            const refreshBtn = document.getElementById('refresh-btn');
+
+            try {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<div class="spinner"></div> Refreshing...';
+                
+                errorDiv.style.display = 'none';
+                contentArea.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading matches...</span></div>';
+
+                const response = await fetch(`${API_BASE_URL}/api/live-matches`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const matches = data.data.matches;
+                    lastUpdateDiv.textContent = `Last updated: ${new Date().toLocaleString()}`;
+                    
+                    if (matches.length === 0) {
+                        contentArea.innerHTML = '<div class="loading"><div style="font-size: 48px; color: #dee2e6;">🏏</div><p>No matches available</p></div>';
+                    } else {
+                        contentArea.innerHTML = matches.map(match => `
+                            <div class="match-card">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="color: ${match.status.toLowerCase() === 'live' ? '#dc3545' : '#6c757d'};">${match.status.toLowerCase() === 'live' ? '🔴' : '⚪'}</span>
+                                        <span class="match-status ${getStatusClass(match.status)}">${match.status.toUpperCase()}</span>
+                                    </div>
+                                    <span style="font-size: 14px; color: #6c757d;">${new Date(match.starting_at).toLocaleString()}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 16px;">
+                                        <div style="text-align: center;">
+                                            <div style="font-weight: bold; font-size: 18px;">${match.localteam.name}</div>
+                                            <div style="font-size: 14px; color: #6c757d;">${match.localteam.code}</div>
+                                        </div>
+                                        <div style="font-size: 24px; font-weight: bold; color: #6c757d;">VS</div>
+                                        <div style="text-align: center;">
+                                            <div style="font-weight: bold; font-size: 18px;">${match.visitorteam.name}</div>
+                                            <div style="font-size: 14px; color: #6c757d;">${match.visitorteam.code}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                ${match.venue ? `<div style="font-size: 14px; color: #6c757d;"><strong>Venue:</strong> ${match.venue.name}, ${match.venue.city}</div>` : ''}
+                                ${match.live_score ? `<div style="margin-top: 8px; font-size: 14px; font-weight: bold; color: #22c55e;">Live Score: ${match.live_score}</div>` : ''}
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    throw new Error(data.error || 'Failed to load matches');
+                }
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+                contentArea.innerHTML = '<div class="loading"><div style="font-size: 48px; color: #dee2e6;">🏏</div><p>Failed to load matches</p></div>';
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '🔄 Refresh';
+            }
+        }
+
+        async function loadQuestions() {
+            const matchId = document.getElementById('match-id-input').value;
+            const contentArea = document.getElementById('questions-content-area');
+            const errorDiv = document.getElementById('questions-error');
+            const loadBtn = document.getElementById('load-questions-btn');
+
+            if (!matchId) {
+                errorDiv.textContent = 'Please enter a match ID';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                loadBtn.disabled = true;
+                loadBtn.textContent = 'Loading...';
+                
+                errorDiv.style.display = 'none';
+                contentArea.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading questions...</span></div>';
+
+                const response = await fetch(`${API_BASE_URL}/api/questions/match/${matchId}/questions`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const questions = data.data.questions;
+                    
+                    if (questions.length === 0) {
+                        contentArea.innerHTML = '<div class="loading"><div style="font-size: 48px; color: #dee2e6;">🧠</div><p>No questions available for this match</p></div>';
+                    } else {
+                        contentArea.innerHTML = questions.map(question => `
+                            <div class="match-card">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span>🎯</span>
+                                        <span style="font-weight: bold;">${question.category}</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span class="match-status ${getDifficultyClass(question.difficulty)}">${question.difficulty}</span>
+                                        <span style="font-size: 14px; font-weight: bold; color: ${getConfidenceColor(question.confidence)}">${Math.round(question.confidence * 100)}% confidence</span>
+                                    </div>
+                                </div>
+                                <p style="margin-bottom: 12px; font-size: 16px;">${question.question}</p>
+                                <div style="display: flex; justify-content: space-between; font-size: 14px; color: #6c757d;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span>🕒</span>
+                                        <span>${new Date(question.timestamp).toLocaleString()}</span>
+                                    </div>
+                                    <span>Match ID: ${question.matchId}</span>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    throw new Error(data.error || 'Failed to load questions');
+                }
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+                contentArea.innerHTML = '<div class="loading"><div style="font-size: 48px; color: #dee2e6;">🧠</div><p>Failed to load questions</p></div>';
+            } finally {
+                loadBtn.disabled = false;
+                loadBtn.textContent = 'Load Questions';
+            }
+        }
+
+        async function loadMonitoring() {
+            const contentArea = document.getElementById('monitoring-content-area');
+            const errorDiv = document.getElementById('monitoring-error');
+
+            try {
+                errorDiv.style.display = 'none';
+                contentArea.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading monitoring data...</span></div>';
+
+                const [healthResponse, monitoringResponse] = await Promise.all([
+                    fetch(`${API_BASE_URL}/health`),
+                    fetch(`${API_BASE_URL}/monitoring/status`)
+                ]);
+
+                const healthData = await healthResponse.json();
+                const monitoringData = await monitoringResponse.json();
+
+                let html = '<div class="card"><h3 style="font-size: 18px; font-weight: bold; margin-bottom: 16px;">🏥 Health Status</h3>';
+                
+                html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">`;
+                html += `<div style="padding: 16px; background-color: #f8f9fa; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="font-size: 14px; font-weight: bold; color: #6c757d;">Overall Status</span>
+                        <span style="color: ${healthData.status === 'healthy' ? '#28a745' : '#dc3545'};">${healthData.status === 'healthy' ? '✅' : '❌'}</span>
+                    </div>
+                    <span class="match-status ${getStatusClass(healthData.status)}">${healthData.status.toUpperCase()}</span>
+                </div>`;
+                html += `<div style="padding: 16px; background-color: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 14px; font-weight: bold; color: #6c757d; margin-bottom: 4px;">Service</div>
+                    <div style="font-size: 18px; font-weight: bold;">${healthData.service}</div>
+                </div>`;
+                html += `<div style="padding: 16px; background-color: #f8f9fa; border-radius: 8px;">
+                    <div style="font-size: 14px; font-weight: bold; color: #6c757d; margin-bottom: 4px;">Uptime</div>
+                    <div style="font-size: 18px; font-weight: bold;">${formatUptime(healthData.uptimeSeconds)}</div>
+                </div>`;
+                html += `</div></div>`;
+
+                if (monitoringData.success) {
+                    html += '<div class="card"><h3 style="font-size: 18px; font-weight: bold; margin-bottom: 16px;">📊 System Metrics</h3>';
+                    html += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">';
+                    
+                    if (monitoringData.data.api) {
+                        html += `<div><h4 style="font-weight: bold; margin-bottom: 12px;">API Performance</h4>`;
+                        html += `<div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="font-size: 14px; color: #6c757d;">Success Rate:</span>
+                                <span style="font-size: 14px; font-weight: bold;">${monitoringData.data.api.successRate || 'N/A'}%</span>
+                            </div>
+                        </div></div>`;
+                    }
+                    html += '</div></div>';
+                }
+
+                contentArea.innerHTML = html;
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+                contentArea.innerHTML = '<div class="loading"><div style="font-size: 48px; color: #dee2e6;">📊</div><p>Failed to load monitoring data</p></div>';
+            }
+        }
+
+        function getStatusClass(status) {
+            switch (status.toLowerCase()) {
+                case 'live':
+                case 'healthy':
+                    return 'status-live';
+                case 'finished':
+                case 'error':
+                    return 'status-finished';
+                case 'upcoming':
+                case 'degraded':
+                    return 'status-upcoming';
+                default:
+                    return 'status-finished';
+            }
+        }
+
+        function getDifficultyClass(difficulty) {
+            switch (difficulty) {
+                case 'easy':
+                    return 'status-upcoming';
+                case 'medium':
+                    return 'status-live';
+                case 'hard':
+                    return 'status-finished';
+                default:
+                    return 'status-finished';
+            }
+        }
+
+        function getConfidenceColor(confidence) {
+            if (confidence >= 0.8) return '#28a745';
+            if (confidence >= 0.6) return '#ffc107';
+            return '#dc3545';
+        }
+
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            testConnection();
+            loadMatches();
+        });
+    </script>
+</body>
+</html>
