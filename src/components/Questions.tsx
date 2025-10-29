@@ -11,7 +11,9 @@ const Questions: React.FC<QuestionsProps> = ({ selectedMatchId }) => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [questionId: string]: 'yes' | 'no' | null }>({});
+  const [generating, setGenerating] = useState(false);
   const previousMatchId = useRef<string>('');
 
   useEffect(() => {
@@ -102,6 +104,7 @@ const Questions: React.FC<QuestionsProps> = ({ selectedMatchId }) => {
     try {
       setLoading(true);
       setError(null);
+      setSuccess(null);
       console.log('Loading questions for match:', selectedMatchId);
       const response = await apiService.getQuestions(selectedMatchId);
       console.log('Questions response:', response);
@@ -192,6 +195,36 @@ const Questions: React.FC<QuestionsProps> = ({ selectedMatchId }) => {
     }));
   };
 
+  const handleGenerateQuestions = async () => {
+    if (!selectedMatchId) return;
+
+    try {
+      setGenerating(true);
+      setError(null);
+      setSuccess(null);
+      console.log('Generating questions for match:', selectedMatchId);
+      
+      const response = await apiService.generateQuestions(selectedMatchId);
+      console.log('Generate questions response:', response);
+      
+      if (response.success) {
+        setSuccess('Questions generated successfully! Loading questions...');
+        // Wait a bit for questions to be generated, then reload
+        setTimeout(() => {
+          loadQuestions();
+          setSuccess(null);
+        }, 2000);
+      } else {
+        setError(response.message || 'Failed to generate questions');
+      }
+    } catch (error) {
+      setError('Failed to generate questions');
+      console.error('Error generating questions:', error);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const getDifficultyClass = (difficulty: string) => {
     switch (difficulty) {
       case 'easy':
@@ -223,8 +256,34 @@ const Questions: React.FC<QuestionsProps> = ({ selectedMatchId }) => {
       )}
 
       {error && (
-        <div className="error">
-          {error}
+        <div className="error" style={{ 
+          backgroundColor: '#fee2e2', 
+          border: '1px solid #fecaca', 
+          borderRadius: '8px',
+          padding: '12px 16px',
+          marginBottom: '16px',
+          color: '#991b1b'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', marginBottom: '4px' }}>
+            ⚠️ Error
+          </div>
+          <div>{error}</div>
+        </div>
+      )}
+
+      {success && (
+        <div className="success" style={{ 
+          backgroundColor: '#d1fae5', 
+          border: '1px solid #86efac', 
+          borderRadius: '8px',
+          padding: '12px 16px',
+          marginBottom: '16px',
+          color: '#065f46'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
+            ✅ Success
+          </div>
+          <div>{success}</div>
         </div>
       )}
 
@@ -252,9 +311,29 @@ const Questions: React.FC<QuestionsProps> = ({ selectedMatchId }) => {
                 <p><strong>⚠️ Debug Info:</strong></p>
                 <p>Match ID: <code>{selectedMatchId}</code></p>
                 <p>Questions in DB: 0</p>
-                <p style={{ marginTop: '8px' }}><strong>Possible Solutions:</strong></p>
+                <p style={{ marginTop: '8px', marginBottom: '12px' }}>
+                  No questions found for this match. Click the button below to generate questions:
+                </p>
+                <button
+                  onClick={handleGenerateQuestions}
+                  disabled={generating}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#22c55e',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: generating ? 'not-allowed' : 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    opacity: generating ? 0.6 : 1,
+                    transition: 'opacity 0.2s ease'
+                  }}
+                >
+                  {generating ? '🔄 Generating...' : '✨ Generate Questions'}
+                </button>
+                <p style={{ marginTop: '12px', marginBottom: '0' }}><strong>Alternative Solutions:</strong></p>
                 <ul style={{ textAlign: 'left', marginTop: '8px', marginLeft: '20px' }}>
-                  <li>Check if the backend has generated questions for this match ID</li>
                   <li>Try using a different match ID that has questions in the database</li>
                   <li>Check backend logs to see if question generation is working</li>
                   <li>Verify the database connection and if questions are stored correctly</li>

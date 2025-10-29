@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { apiService, Match } from '../services/apiService';
-import { Activity, RefreshCw, Target } from 'lucide-react';
+import { Activity, RefreshCw, Target, Copy } from 'lucide-react';
 
 const LiveMatches: React.FC = () => {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMatches();
@@ -17,7 +18,8 @@ const LiveMatches: React.FC = () => {
       setLoading(true);
       setError(null);
       const response = await apiService.getLiveMatches();
-      
+      console.log('Live matches response:', response);
+
       if (response.success && response.data) {
         // Validate response structure
         if (!response.data.matches || !Array.isArray(response.data.matches)) {
@@ -25,7 +27,7 @@ const LiveMatches: React.FC = () => {
           setError('Invalid data format received from server');
           return;
         }
-        
+
         // Filter out invalid match objects and remove duplicates
         const validMatches = response.data.matches.filter(match => {
           if (!match || typeof match !== 'object') {
@@ -45,12 +47,16 @@ const LiveMatches: React.FC = () => {
           }
           return acc;
         }, [] as Match[]);
-        
-        setMatches(uniqueMatches);
+
+        // Filter to only show live matches
+        const liveMatches = uniqueMatches.filter(match => match.status.toLowerCase() === 'live');
+
+        setMatches(liveMatches);
         setLastUpdate(new Date().toISOString());
-        
-        if (uniqueMatches.length !== response.data.matches.length) {
-          console.warn(`Filtered out ${response.data.matches.length - uniqueMatches.length} invalid/duplicate match objects`);
+
+        const totalFilteredOut = response.data.matches.length - liveMatches.length;
+        if (totalFilteredOut > 0) {
+          console.warn(`Filtered out ${totalFilteredOut} matches (${response.data.matches.length - uniqueMatches.length} invalid/duplicate + ${uniqueMatches.length - liveMatches.length} non-live matches)`);
         }
       } else {
         console.error('API response indicates failure:', response);
@@ -97,12 +103,16 @@ const LiveMatches: React.FC = () => {
           }
           return acc;
         }, [] as Match[]);
-        
-        setMatches(uniqueMatches);
+
+        // Filter to only show live matches
+        const liveMatches = uniqueMatches.filter(match => match.status.toLowerCase() === 'live');
+
+        setMatches(liveMatches);
         setLastUpdate(new Date().toISOString());
-        
-        if (uniqueMatches.length !== response.data.matches.length) {
-          console.warn(`Filtered out ${response.data.matches.length - uniqueMatches.length} invalid/duplicate match objects on refresh`);
+
+        const totalFilteredOut = response.data.matches.length - liveMatches.length;
+        if (totalFilteredOut > 0) {
+          console.warn(`Filtered out ${totalFilteredOut} matches on refresh (${response.data.matches.length - uniqueMatches.length} invalid/duplicate + ${uniqueMatches.length - liveMatches.length} non-live matches)`);
         }
       } else {
         console.error('API refresh response indicates failure:', response);
@@ -126,6 +136,17 @@ const LiveMatches: React.FC = () => {
         return 'status-upcoming';
       default:
         return 'status-finished';
+    }
+  };
+
+  const copyMatchId = async (matchId: string | number) => {
+    try {
+      await navigator.clipboard.writeText(String(matchId));
+      setCopiedId(String(matchId));
+      // Clear the copied state after 2 seconds
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy match ID:', error);
     }
   };
 
@@ -199,7 +220,40 @@ const LiveMatches: React.FC = () => {
                 <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px', color: '#212529' }}>
                   {match.title || `Match ${match.id}`}
                 </div>
-                
+
+                {/* Match ID with copy functionality */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '12px', color: '#6c757d' }}>ID:</span>
+                  <button
+                    onClick={() => copyMatchId(match.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      backgroundColor: copiedId === String(match.id) ? '#d4edda' : '#f8f9fa',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: copiedId === String(match.id) ? '#155724' : '#495057',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = copiedId === String(match.id) ? '#c3e6cb' : '#e9ecef';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = copiedId === String(match.id) ? '#d4edda' : '#f8f9fa';
+                    }}
+                  >
+                    <Copy size={12} />
+                    <span>{String(match.id)}</span>
+                    {copiedId === String(match.id) && (
+                      <span style={{ fontSize: '10px', color: '#155724' }}>Copied!</span>
+                    )}
+                  </button>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Activity size={16} color={match.status.toLowerCase() === 'live' ? '#dc3545' : '#6c757d'} />
@@ -213,34 +267,58 @@ const LiveMatches: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>
                         {match?.localteam?.name || 'Team A'}
                       </div>
-                      <div style={{ fontSize: '14px', color: '#6c757d' }}>
-                        {match?.localteam?.code || 'TEA'}
-                      </div>
+                      {match?.localteam?.score ? (
+                        <div style={{ fontSize: '16px', color: '#dc3545', fontWeight: 'bold' }}>
+                          {match.localteam.score}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '14px', color: '#6c757d' }}>
+                          {match?.localteam?.code || 'TEA'}
+                        </div>
+                      )}
                     </div>
                     <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#6c757d' }}>VS</div>
-                    <div style={{ textAlign: 'center' }}>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
                       <div style={{ fontWeight: 'bold', fontSize: '18px' }}>
                         {match?.visitorteam?.name || 'Team B'}
                       </div>
-                      <div style={{ fontSize: '14px', color: '#6c757d' }}>
-                        {match?.visitorteam?.code || 'TEB'}
-                      </div>
+                      {match?.visitorteam?.score ? (
+                        <div style={{ fontSize: '16px', color: '#dc3545', fontWeight: 'bold' }}>
+                          {match.visitorteam.score}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '14px', color: '#6c757d' }}>
+                          {match?.visitorteam?.code || 'TEB'}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {match.venue && (
-                  <div style={{ fontSize: '14px', color: '#6c757d' }}>
+                  <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '4px' }}>
                     <strong>Venue:</strong> {match?.venue?.name || 'Unknown Venue'}, {match?.venue?.city || 'Unknown City'}
                   </div>
                 )}
 
-                {match.live_score && (
+                {match.toss && (
+                  <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '4px' }}>
+                    <strong>Toss:</strong> {match.toss}
+                  </div>
+                )}
+
+                {match.result?.message && (
+                  <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 'bold', color: '#dc3545' }}>
+                    Result: {match.result.message}
+                  </div>
+                )}
+
+                {match.live_score && !match.result?.message && (
                   <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 'bold', color: '#22c55e' }}>
                     Live Score: {match.live_score}
                   </div>

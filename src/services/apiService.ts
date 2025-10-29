@@ -1,30 +1,71 @@
 import axios from 'axios';
 
-// API Server and React both run on port 3000
-// React proxies API requests via public/index.html
-const API_BASE_URL = 'http://localhost:3000';
+// API Server runs on port 3000, React runs on port 3001
+// React proxies API requests to the backend server
+const API_BASE_URL = '';
 
 export interface Match {
-  id: number;
+  id: number | string;
   title: string;
   status: string;
   localteam: {
-    id: number;
+    id?: number;
     name: string;
     code: string;
+    logo?: string;
+    score?: string;
   };
   visitorteam: {
-    id: number;
+    id?: number;
     name: string;
     code: string;
+    logo?: string;
+    score?: string;
   };
-  venue: {
-    id: number;
+  venue?: {
+    id?: number;
     name: string;
-    city: string;
+    city?: string;
   };
   starting_at: string;
   live_score?: string;
+  toss?: string;
+  ground?: string;
+  result?: {
+    message: string;
+    winnerTeamKey?: string;
+  };
+}
+
+// Raw API response format
+export interface RawApiMatch {
+  teams: {
+    t1: {
+      name: string;
+      logo: string;
+      score: string;
+    };
+    t2: {
+      name: string;
+      logo: string;
+      score: string;
+    };
+  };
+  result?: {
+    message: string;
+    winnerTeamKey: string;
+  } | null;
+  _id: string;
+  createdAt: string;
+  format: number;
+  isLive: boolean;
+  name: string;
+  seriesId: string;
+  status: number;
+  timestamp: number;
+  updatedAt: string;
+  ground: string;
+  toss: string;
 }
 
 export interface Question {
@@ -87,6 +128,73 @@ class ApiService {
     timeout: 10000,
   });
 
+  // Transform raw API match format to Match interface
+  private transformApiMatch(rawMatch: RawApiMatch): Match {
+    // Convert team name to code (take first 3 letters, uppercase)
+    const getTeamCode = (name: string): string => {
+      return name
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase())
+        .join('')
+        .substring(0, 3);
+    };
+
+    // Map numeric status to string
+    const getStatusString = (status: number, isLive: boolean, result?: { message: string } | null): string => {
+      // If there's a result message, match is finished
+      if (result?.message) return 'Finished';
+      // If isLive is true and no result, match is live
+      if (isLive) return 'Live';
+      // Status 0 typically means upcoming/not started
+      if (status === 0) return 'Upcoming';
+      // Status 1+ typically means in progress or finished
+      // Since we already checked for result and isLive, this must be in progress or just finished
+      return status === 1 ? 'Live' : 'Finished';
+    };
+
+    // Convert Unix timestamp to ISO string
+    const timestampToISO = (timestamp: number): string => {
+      return new Date(timestamp * 1000).toISOString();
+    };
+
+    // Parse ground information
+    const groundParts = rawMatch.ground ? rawMatch.ground.split(', ') : ['Unknown', ''];
+    const venueName = groundParts[0] || 'Unknown';
+    const venueCity = groundParts.slice(1).join(', ') || 'Unknown';
+
+    return {
+      id: rawMatch._id,
+      title: rawMatch.name,
+      status: getStatusString(rawMatch.status, rawMatch.isLive, rawMatch.result),
+      localteam: {
+        name: rawMatch.teams.t1.name,
+        code: getTeamCode(rawMatch.teams.t1.name),
+        logo: rawMatch.teams.t1.logo,
+        score: rawMatch.teams.t1.score,
+      },
+      visitorteam: {
+        name: rawMatch.teams.t2.name,
+        code: getTeamCode(rawMatch.teams.t2.name),
+        logo: rawMatch.teams.t2.logo,
+        score: rawMatch.teams.t2.score,
+      },
+      venue: {
+        name: venueName,
+        city: venueCity,
+      },
+      starting_at: timestampToISO(rawMatch.timestamp),
+      live_score: rawMatch.teams.t1.score && rawMatch.teams.t2.score
+        ? `${rawMatch.teams.t1.score} vs ${rawMatch.teams.t2.score}`
+        : undefined,
+      toss: rawMatch.toss,
+      ground: rawMatch.ground,
+      result: rawMatch.result && rawMatch.result.message ? {
+        message: rawMatch.result.message,
+        winnerTeamKey: rawMatch.result.winnerTeamKey || undefined,
+      } : undefined,
+    };
+  }
+
   constructor() {
     // Add request interceptor for logging
     this.api.interceptors.request.use(
@@ -128,7 +236,25 @@ class ApiService {
         throw new Error(response.data.message || 'Server returned unsuccessful response');
       }
       
-      if (!response.data.data || !Array.isArray(response.data.data.matches)) {
+      // Handle nested data structure: response.data.data.data contains the matches array
+      let matchesData = response.data.data;
+
+      // The matches are in response.data.data.data
+      let rawMatches: RawApiMatch[] = [];
+
+      if (matchesData && typeof matchesData === 'object' && !Array.isArray(matchesData) && Array.isArray(matchesData.data)) {
+        // New format: matches are in response.data.data.data
+        rawMatches = matchesData.data;
+      } else if (matchesData && Array.isArray(matchesData.matches)) {
+        // Old format with matches property
+        rawMatches = matchesData.matches;
+      } else if (matchesData && Array.isArray(matchesData.raw)) {
+        // Old format with raw property
+        rawMatches = matchesData.raw;
+      } else if (Array.isArray(matchesData)) {
+        // Fallback: data is directly an array
+        rawMatches = matchesData;
+      } else {
         console.warn('No matches found in response, returning empty array');
         return {
           success: true,
@@ -139,8 +265,18 @@ class ApiService {
           }
         };
       }
-      
-      return response.data;
+
+      // Transform raw API matches to Match interface
+      const transformedMatches: Match[] = rawMatches.map(rawMatch => this.transformApiMatch(rawMatch));
+
+      return {
+        success: true,
+        data: {
+          matches: transformedMatches,
+          count: transformedMatches.length,
+          source: 'api'
+        }
+      };
     } catch (error: any) {
       console.error('Failed to fetch live matches:', error);
       
@@ -170,7 +306,25 @@ class ApiService {
         throw new Error(response.data.message || 'Server returned unsuccessful response');
       }
       
-      if (!response.data.data || !Array.isArray(response.data.data.matches)) {
+      // Handle nested data structure: response.data.data.data contains the matches array
+      let matchesData = response.data.data;
+
+      // The matches are in response.data.data.data
+      let rawMatches: RawApiMatch[] = [];
+
+      if (matchesData && typeof matchesData === 'object' && !Array.isArray(matchesData) && Array.isArray(matchesData.data)) {
+        // New format: matches are in response.data.data.data
+        rawMatches = matchesData.data;
+      } else if (matchesData && Array.isArray(matchesData.matches)) {
+        // Old format with matches property
+        rawMatches = matchesData.matches;
+      } else if (matchesData && Array.isArray(matchesData.raw)) {
+        // Old format with raw property
+        rawMatches = matchesData.raw;
+      } else if (Array.isArray(matchesData)) {
+        // Fallback: data is directly an array
+        rawMatches = matchesData;
+      } else {
         console.warn('No matches found in refresh response, returning empty array');
         return {
           success: true,
@@ -180,8 +334,17 @@ class ApiService {
           }
         };
       }
+
+      // Transform raw API matches to Match interface
+      const transformedMatches: Match[] = rawMatches.map(rawMatch => this.transformApiMatch(rawMatch));
       
-      return response.data;
+      return {
+        success: true,
+        data: {
+          matches: transformedMatches,
+          count: transformedMatches.length
+        }
+      };
     } catch (error: any) {
       console.error('Failed to refresh live matches:', error);
       
@@ -351,6 +514,21 @@ class ApiService {
       return {
         success: false,
         message: error.response?.data?.message || error.message || 'Connection failed'
+      };
+    }
+  }
+
+  // Generate Questions API
+  async generateQuestions(matchId: string): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      const response = await this.api.post(`/api/questions/generate`, { matchId });
+      console.log('Generate questions response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Failed to generate questions:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Failed to generate questions'
       };
     }
   }
